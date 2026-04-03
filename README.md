@@ -33,6 +33,7 @@ The official implementation of *Flow Planner*, an advanced learning-based framew
 
 </div>
 
+Checkpoints can be found [here](https://huggingface.co/ttwhy/flow-planner).
 
 ## Contents
 
