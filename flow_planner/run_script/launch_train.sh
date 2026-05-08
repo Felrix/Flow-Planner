@@ -8,4 +8,4 @@ export TRAINING_DATA= # path to the training data npz
 export TRAINING_JSON= # path to the training data list json
 export TORCH_LOGS="dynamic,recompiles"
 
-python -m torch.distributed.run --nnodes 1 --nproc-per-node 8 --standalone ../trainer.py --config-name flow_planner_standard
+python -m torch.distributed.run --nnodes 1 --nproc-per-node 8 --standalone $PROJECT_ROOT/flow_planner/trainer.py --config-name flow_planner_standard
