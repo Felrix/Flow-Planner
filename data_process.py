@@ -87,8 +87,8 @@ if __name__ == "__main__":
     max_points = {'LANE': args.lane_len, 'LEFT_BOUNDARY': args.lane_len, 'RIGHT_BOUNDARY': args.lane_len,
                   'ROUTE_LANES': args.route_len, 'ROUTE_POLYGON': 10, 'CROSSWALK': 10}
 
-    num_processes = multiprocessing.cpu_count()
-    batch_size = 10
+    num_processes = multiprocessing.cpu_count() // 2
+    batch_size = 16
 
     # 并行处理Scenarios
     try:
