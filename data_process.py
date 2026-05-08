@@ -1,6 +1,8 @@
 import os
 import argparse
 import json
+import multiprocessing
+from joblib import Parallel, delayed
 
 from flow_planner.data.data_process.data_processor import DataProcessor
 
@@ -9,29 +11,31 @@ from nuplan.planning.scenario_builder.scenario_filter import ScenarioFilter
 from nuplan.planning.scenario_builder.nuplan_db.nuplan_scenario_builder import NuPlanScenarioBuilder
 from nuplan.planning.scenario_builder.nuplan_db.nuplan_scenario_utils import ScenarioMapping
 
-def get_filter_parameters(num_scenarios_per_type=None, limit_total_scenarios=None, shuffle=True, scenario_tokens=None, log_names=None):
 
+def get_filter_parameters(num_scenarios_per_type=None, limit_total_scenarios=None, shuffle=True, scenario_tokens=None,
+                          log_names=None):
     scenario_types = None
 
-    scenario_tokens                      # List of scenario tokens to include
-    log_names = log_names                # Filter scenarios by log names
-    map_names = None                     # Filter scenarios by map names
+    scenario_tokens  # List of scenario tokens to include
+    log_names = log_names  # Filter scenarios by log names
+    map_names = None  # Filter scenarios by map names
 
-    num_scenarios_per_type               # Number of scenarios per type
-    limit_total_scenarios                # Limit total scenarios (float = fraction, int = num) - this filter can be applied on top of num_scenarios_per_type
-    timestamp_threshold_s = None         # Filter scenarios to ensure scenarios have more than `timestamp_threshold_s` seconds between their initial lidar timestamps
-    ego_displacement_minimum_m = None    # Whether to remove scenarios where the ego moves less than a certain amount
+    num_scenarios_per_type  # Number of scenarios per type
+    limit_total_scenarios  # Limit total scenarios (float = fraction, int = num) - this filter can be applied on top of num_scenarios_per_type
+    timestamp_threshold_s = None  # Filter scenarios to ensure scenarios have more than `timestamp_threshold_s` seconds between their initial lidar timestamps
+    ego_displacement_minimum_m = None  # Whether to remove scenarios where the ego moves less than a certain amount
 
-    expand_scenarios = True              # Whether to expand multi-sample scenarios to multiple single-sample scenarios
-    remove_invalid_goals = False          # Whether to remove scenarios where the mission goal is invalid
-    shuffle                              # Whether to shuffle the scenarios
+    expand_scenarios = True  # Whether to expand multi-sample scenarios to multiple single-sample scenarios
+    remove_invalid_goals = False  # Whether to remove scenarios where the mission goal is invalid
+    shuffle  # Whether to shuffle the scenarios
 
-    ego_start_speed_threshold = None     # Limit to scenarios where the ego reaches a certain speed from below
-    ego_stop_speed_threshold = None      # Limit to scenarios where the ego reaches a certain speed from above
-    speed_noise_tolerance = None         # Value at or below which a speed change between two timepoints should be ignored as noise.
+    ego_start_speed_threshold = None  # Limit to scenarios where the ego reaches a certain speed from below
+    ego_stop_speed_threshold = None  # Limit to scenarios where the ego reaches a certain speed from above
+    speed_noise_tolerance = None  # Value at or below which a speed change between two timepoints should be ignored as noise.
 
     return scenario_types, scenario_tokens, log_names, map_names, num_scenarios_per_type, limit_total_scenarios, timestamp_threshold_s, ego_displacement_minimum_m, \
-           expand_scenarios, remove_invalid_goals, shuffle, ego_start_speed_threshold, ego_stop_speed_threshold, speed_noise_tolerance
+        expand_scenarios, remove_invalid_goals, shuffle, ego_start_speed_threshold, ego_stop_speed_threshold, speed_noise_tolerance
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Data Processing')
@@ -63,9 +67,11 @@ if __name__ == "__main__":
     with open('./nuplan_train.json', "r", encoding="utf-8") as file:
         log_names = json.load(file)
 
-    map_version = "nuplan-maps-v1.0"    
+    map_version = "nuplan-maps-v1.0"
     builder = NuPlanScenarioBuilder(args.data_path, args.map_path, sensor_root, db_files, map_version)
-    scenario_filter = ScenarioFilter(*get_filter_parameters(args.scenarios_per_type, args.total_scenarios, args.shuffle_scenarios, log_names=log_names))
+    scenario_filter = ScenarioFilter(
+        *get_filter_parameters(args.scenarios_per_type, args.total_scenarios, args.shuffle_scenarios,
+                               log_names=log_names))
 
     worker = SingleMachineParallelExecutor(use_process_pool=True)
     scenarios = builder.get_scenarios(scenario_filter, worker)
@@ -73,8 +79,27 @@ if __name__ == "__main__":
 
     # process data
     del worker, builder, scenario_filter
-    processor = DataProcessor(args.save_path)
-    processor.work(scenarios)
+
+    # 构造静态地图参数用于并行运算
+    map_features = ['LANE', 'LEFT_BOUNDARY', 'RIGHT_BOUNDARY', 'ROUTE_LANES', 'ROUTE_POLYGON', 'CROSSWALK']
+    max_elements = {'LANE': args.lane_num, 'LEFT_BOUNDARY': args.lane_num, 'RIGHT_BOUNDARY': args.lane_num,
+                    'ROUTE_LANES': args.route_num, 'ROUTE_POLYGON': 5, 'CROSSWALK': 5}
+    max_points = {'LANE': args.lane_len, 'LEFT_BOUNDARY': args.lane_len, 'RIGHT_BOUNDARY': args.lane_len,
+                  'ROUTE_LANES': args.route_len, 'ROUTE_POLYGON': 10, 'CROSSWALK': 10}
+
+    num_processes = multiprocessing.cpu_count()
+    batch_size = 10
+
+    # 并行处理Scenarios
+    try:
+        Parallel(n_jobs=num_processes, batch_size=batch_size)(
+            delayed(DataProcessor.process_scenario)(
+                scenario, 20, 2, args.agent_num, args.static_objects_num, 10, map_features, 100, max_elements,
+                max_points, 80, 8, args.save_path
+            ) for scenario in scenarios
+        )
+    finally:
+        pass
 
     npz_files = [f for f in os.listdir(args.save_path) if f.endswith('.npz')]
 
