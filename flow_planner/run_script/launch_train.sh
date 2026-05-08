@@ -1,4 +1,4 @@
-export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+export CUDA_VISIBLE_DEVICES=0,1,2,3
 export WANDB_API_KEY=null
 export HYDRA_FULL_ERROR=1
 export PROJECT_ROOT= # path to the repo
