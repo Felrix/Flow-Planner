@@ -1,4 +1,3 @@
-
 import warnings
 import torch
 import numpy as np
@@ -89,21 +88,31 @@ class FlowPlanner(AbstractPlanner):
         self._route_roadblock_ids = initialization.route_roadblock_ids
 
         if self._ckpt_path is not None:
-            state_dict = torch.load(self._ckpt_path, weights_only=True, map_location=self._device)
+            checkpoint = torch.load(self._ckpt_path, map_location='cpu')
             
-            if self._ema_enabled:
-                state_dict = state_dict['ema_state_dict']
+            if isinstance(checkpoint, dict):
+                if self._ema_enabled and 'ema_state_dict' in checkpoint:
+                    state_dict = checkpoint['ema_state_dict']
+                elif 'state_dict' in checkpoint:
+                    state_dict = checkpoint['state_dict']
+                elif 'model' in checkpoint:
+                    state_dict = checkpoint['model']
+                else:
+                    state_dict = checkpoint
             else:
-                if "model" in state_dict.keys():
-                    state_dict = state_dict['model']
-            # use for ddp
-            model_state_dict = {k[len("module."):]: v for k, v in state_dict.items() if k.startswith("module.")}
-            self._planner.load_state_dict(model_state_dict)
+                state_dict = checkpoint
+
+            new_state_dict = {}
+            for k, v in state_dict.items():
+                name = k[7:] if k.startswith('module.') else k
+                new_state_dict[name] = v
+            
+            self._planner.load_state_dict(new_state_dict)
         else:
-            print("load random model")
+            print("Warning: No checkpoint path provided, loading random model.")
         
-        self._planner.eval()
         self._planner = self._planner.to(self._device)
+        self._planner.eval()
         self._initialization = initialization
 
     def planner_input_to_model_inputs(self, planner_input: PlannerInput) -> Dict[str, torch.Tensor]:
@@ -149,4 +158,3 @@ class FlowPlanner(AbstractPlanner):
         )
 
         return trajectory
-    
