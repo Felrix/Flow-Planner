@@ -88,7 +88,7 @@ class FlowPlanner(AbstractPlanner):
         self._route_roadblock_ids = initialization.route_roadblock_ids
 
         if self._ckpt_path is not None:
-            checkpoint = torch.load(self._ckpt_path, map_location='cpu')
+            checkpoint = torch.load(self._ckpt_path, weights_only=True, map_location=self._device)
             
             if isinstance(checkpoint, dict):
                 if self._ema_enabled and 'ema_state_dict' in checkpoint:
