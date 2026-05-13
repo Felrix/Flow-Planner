@@ -72,7 +72,7 @@ class FlowPlanner(AbstractPlanner):
         """
         Inherited.
         """
-        return "diffusion_planner"
+        return "flow_planner"
     
     def observation_type(self) -> Type[Observation]:
         """
