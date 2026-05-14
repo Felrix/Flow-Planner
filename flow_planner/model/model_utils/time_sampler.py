@@ -15,17 +15,25 @@ class TimeSampler():
     def sample(self, shape):
 
         if self.sample_method == 'uniform':
-            t = torch.rand(shape, device=self.device) * (1 - self.eps) + self.eps
-            t0 = self.eps * torch.ones(shape, device=self.device)
+            t = torch.rand(shape, device=self.device).clamp(self.eps, 1 - self.eps)
+
+            r = torch.rand(shape, device=self.device).clamp(self.eps, 1 - self.eps)
 
         elif self.sample_method == 'logit_normal':
             t = torch.randn(shape, device=self.device)
             t = math.sqrt(self.sample_params['s']) * t + self.sample_params['m']
             t = 1 / (1 + torch.exp(-t))
 
+            r = torch.randn(shape, device=self.device)
+            r = math.sqrt(self.sample_params['s']) * r + self.sample_params['m']
+            r = 1 / (1 + torch.exp(-r))
+
         elif self.sample_method == 'cos_map':
             u = torch.rand(shape, device=self.device)
             t = 1 - 1 / (torch.tan(0.5 * torch.pi * u) + 1)
+
+            u = torch.rand(shape, device=self.device)
+            r = 1 - 1 / (torch.tan(0.5 * torch.pi * u) + 1)
 
         elif self.sample_method == 'cosh':
             '''
@@ -41,9 +49,15 @@ class TimeSampler():
             Z_0 = (math.sinh(alpha * (1-mu)) + math.sinh(alpha * mu)) / alpha
             w = (alpha * Z_0 * u - math.sinh(alpha * mu)) + torch.sqrt((alpha * Z_0 * u - math.sinh(alpha * mu))**2 + 1)
             t = torch.log(w) / alpha + mu
+
+            u = torch.rand(shape, device=self.device)
+            w = (alpha * Z_0 * u - math.sinh(alpha * mu)) + torch.sqrt((alpha * Z_0 * u - math.sinh(alpha * mu))**2 + 1)
+            r = torch.log(w) / alpha + mu
         
         elif self.sample_method == 'beta':
-            t = torch.distributions.Beta(self.sample_params['alpha'], self.sample_params['beta']).sample((shape,))
-            t = self.eps + (1 - self.eps) * t
+            t = torch.distributions.Beta(self.sample_params['alpha'], self.sample_params['beta']).sample((shape,)).clamp(self.eps, 1 - self.eps)
 
-        return t
+            r = torch.distributions.Beta(self.sample_params['alpha'], self.sample_params['beta']).sample((shape,)).clamp(self.eps, 1 - self.eps)
+
+        t, r = torch.min(t, r), torch.max(t, r)
+        return t, r
