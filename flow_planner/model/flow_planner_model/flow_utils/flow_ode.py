@@ -28,7 +28,7 @@ class FlowODE(Scheduler):
     
     def sample(self, x_data, target_type):
         B = x_data.shape[0]
-        t = self.time_sampler.sample(B).to(x_data.device)
+        t, r = self.time_sampler.sample(B).to(x_data.device)
         x_0 = torch.randn_like(x_data, device=x_data.device)
         path_sample = self.path.sample(x_0=x_0, x_1=x_data, t=t)
         
@@ -39,7 +39,7 @@ class FlowODE(Scheduler):
         elif target_type == 'noise':
             target = x_0
             
-        return path_sample.x_t, target, t
+        return path_sample.x_t, target, t, r
     
     def generate(self, x_init, model_fn, model_pred_type, use_cfg, **model_extra):
         '''
